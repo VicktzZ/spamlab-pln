@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://spamlab-pln.vercel.app"),
+  openGraph: { title: "SpamLab · Filtro de e-mail com PLN", locale: "pt_BR", type: "website" },
   title: "SpamLab · Filtro de e-mail com PLN",
   description:
     "Demonstração de classificação de spam com Naive Bayes — Processamento de Linguagem Natural, FATEC Cotia.",

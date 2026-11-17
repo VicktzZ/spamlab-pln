@@ -1,192 +1,43 @@
-"use client";
+import Classifier from "@/components/Classifier";
+import { pct, prettyToken } from "@/lib/format";
+import { getModelInfo } from "@/lib/model";
 
-import { useEffect, useState } from "react";
-import { EXAMPLES } from "@/lib/examples";
+const REPO_URL = "https://github.com/VicktzZ/spamlab-pln";
 
-interface Contribution {
-  token: string;
-  count: number;
-  weight: number;
+function GithubIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
 }
-
-interface ClassifyResult {
-  label: "spam" | "ham";
-  pSpam: number;
-  pHam: number;
-  contributions: Contribution[];
-  unknownTokens: string[];
-  tokenCount: number;
-}
-
-interface ModelInfo {
-  algorithm: string;
-  vocabularySize: number;
-  trainDocuments: { spam: number; ham: number };
-  testDocuments: number;
-  evaluation: {
-    accuracy: number;
-    precision: number;
-    recall: number;
-    f1: number;
-    confusion: { tp: number; fp: number; tn: number; fn: number };
-    total: number;
-  };
-  topSpamWords: { token: string; weight: number }[];
-  topHamWords: { token: string; weight: number }[];
-}
-
-const pct = (value: number, digits = 1) => `${(value * 100).toFixed(digits)}%`;
-
-const FEATURE_NAMES: Record<string, string> = {
-  __link__: "contém link",
-  __dinheiro__: "menciona dinheiro",
-  __caixa_alta__: "CAIXA ALTA",
-  __exclamacoes__: "muitas exclamações",
-  __numero_longo__: "número longo",
-};
-
-const prettyToken = (token: string) => FEATURE_NAMES[token] ?? token;
 
 export default function Home() {
-  const [text, setText] = useState(EXAMPLES[0].text);
-  const [result, setResult] = useState<ClassifyResult | null>(null);
-  const [info, setInfo] = useState<ModelInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/classify")
-      .then((res) => res.json())
-      .then(setInfo)
-      .catch(() => setInfo(null));
-  }, []);
-
-  async function classify() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Falha ao classificar.");
-      setResult(data);
-    } catch (err) {
-      setResult(null);
-      setError(err instanceof Error ? err.message : "Erro inesperado.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const maxWeight = result
-    ? Math.max(1, ...result.contributions.map((c) => Math.abs(c.weight)))
-    : 1;
+  // Servidor: o modelo é treinado no import, então as métricas já chegam prontas no HTML (sem fetch no cliente).
+  const info = getModelInfo();
+  const { evaluation, crossValidation } = info;
 
   return (
     <>
       <header className="hero">
         <div className="wrap">
-          <p className="kicker">Processamento de Linguagem Natural · FATEC Cotia</p>
+          <div className="hero-top">
+            <p className="kicker">Processamento de Linguagem Natural · FATEC Cotia</p>
+            <a className="gh-link" href={REPO_URL} target="_blank" rel="noopener noreferrer" aria-label="Código-fonte no GitHub">
+              <GithubIcon />
+              GitHub
+            </a>
+          </div>
           <h1>SpamLab — filtro de e-mail com PLN</h1>
           <p className="sub">
-            Cole uma mensagem e veja um classificador Naive Bayes decidir entre <b>spam</b> e{" "}
-            <b>ham</b> (mensagem legítima), mostrando quais palavras pesaram na decisão.
+            Cole uma mensagem e veja um classificador Naive Bayes decidir entre <b>spam</b> e <b>ham</b> (mensagem
+            legítima), mostrando quais palavras pesaram na decisão.
           </p>
         </div>
       </header>
 
       <main className="wrap">
-        <section className="card">
-          <label className="label" htmlFor="msg">
-            Mensagem
-          </label>
-          <textarea
-            id="msg"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Digite ou cole o texto de um e-mail ou SMS…"
-            maxLength={5000}
-          />
-          <div className="examples" aria-label="Exemplos prontos">
-            {EXAMPLES.map((ex) => (
-              <button key={ex.title} className="chip-btn" type="button" onClick={() => setText(ex.text)}>
-                {ex.title}
-              </button>
-            ))}
-          </div>
-          <div className="actions">
-            <button className="primary" type="button" onClick={classify} disabled={loading || !text.trim()}>
-              {loading ? "Classificando…" : "Classificar mensagem"}
-            </button>
-            <span className="hint">{text.length} / 5000 caracteres</span>
-          </div>
-          {error && <p className="error">{error}</p>}
-        </section>
-
-        {result && (
-          <section className="card" aria-live="polite">
-            <h2>Resultado</h2>
-            <div className="verdict">
-              <span className={`badge ${result.label}`}>{result.label === "spam" ? "SPAM" : "HAM (legítima)"}</span>
-              <span className="verdict-text">
-                P(spam) = <b>{pct(result.pSpam)}</b> · P(ham) = <b>{pct(result.pHam)}</b> · {result.tokenCount} tokens
-              </span>
-            </div>
-            <div className="meter" role="img" aria-label={`Probabilidade de spam: ${pct(result.pSpam)}`}>
-              <div className="meter-fill" style={{ width: `${result.pSpam * 100}%` }} />
-            </div>
-            <div className="meter-scale">
-              <span>0% (ham)</span>
-              <span>100% (spam)</span>
-            </div>
-
-            <div className="sub-label" style={{ marginTop: "1.2rem" }}>
-              Por que o modelo decidiu assim? Peso de cada token = log P(token|spam) − log P(token|ham)
-            </div>
-            {result.contributions.length === 0 ? (
-              <p className="hint">Nenhum token conhecido pelo modelo nesta mensagem; vale só a probabilidade a priori.</p>
-            ) : (
-              <>
-                <div className="contrib">
-                  {result.contributions.map((c) => (
-                    <div className="contrib-row" key={c.token}>
-                      <span className="contrib-token" title={c.token}>
-                        {prettyToken(c.token)}
-                        {c.count > 1 ? ` ×${c.count}` : ""}
-                      </span>
-                      <div className="bar-track">
-                        <div
-                          className={`bar ${c.weight >= 0 ? "spam" : "ham"}`}
-                          style={{ width: `${Math.min(50, (Math.abs(c.weight) / maxWeight) * 50)}%` }}
-                        />
-                      </div>
-                      <span className="weight">{c.weight > 0 ? "+" : ""}{c.weight.toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="legend">
-                  <span>← puxa para ham</span>
-                  <span>puxa para spam →</span>
-                </p>
-              </>
-            )}
-            {result.unknownTokens.length > 0 && (
-              <>
-                <div className="sub-label">Palavras que o modelo nunca viu (ignoradas):</div>
-                <div className="pills">
-                  {result.unknownTokens.map((t) => (
-                    <span className="pill neutral" key={t}>
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-        )}
+        <Classifier />
 
         <section className="card">
           <h2>Como o filtro funciona</h2>
@@ -214,96 +65,121 @@ export default function Home() {
           </div>
         </section>
 
-        {info && (
-          <section className="card">
-            <h2>Desempenho do modelo</h2>
-            <p className="hint" style={{ marginTop: 0 }}>
-              {info.algorithm}. Treinado com {info.trainDocuments.spam + info.trainDocuments.ham} mensagens e
-              avaliado em {info.testDocuments} mensagens separadas (teste). Vocabulário: {info.vocabularySize} tokens.
-            </p>
-            <div className="stats">
-              <div className="stat">
-                <b>{pct(info.evaluation.accuracy)}</b>
-                <span>Acurácia</span>
-              </div>
-              <div className="stat">
-                <b>{pct(info.evaluation.precision)}</b>
-                <span>Precisão (spam)</span>
-              </div>
-              <div className="stat">
-                <b>{pct(info.evaluation.recall)}</b>
-                <span>Recall (spam)</span>
-              </div>
-              <div className="stat">
-                <b>{pct(info.evaluation.f1)}</b>
-                <span>F1-score</span>
-              </div>
+        <section className="card">
+          <h2>Desempenho do modelo</h2>
+          <p className="hint" style={{ marginTop: 0 }}>
+            {info.algorithm}. Treinado com {info.trainDocuments.spam + info.trainDocuments.ham} mensagens e avaliado em{" "}
+            {info.testDocuments} mensagens separadas (teste). Vocabulário: {info.vocabularySize} tokens.
+          </p>
+          <div className="stats">
+            <div className="stat">
+              <b>{pct(evaluation.accuracy)}</b>
+              <span>Acurácia</span>
             </div>
+            <div className="stat">
+              <b>{pct(evaluation.precision)}</b>
+              <span>Precisão (spam)</span>
+            </div>
+            <div className="stat">
+              <b>{pct(evaluation.recall)}</b>
+              <span>Recall (spam)</span>
+            </div>
+            <div className="stat">
+              <b>{pct(evaluation.f1)}</b>
+              <span>F1-score</span>
+            </div>
+          </div>
 
-            <div className="two-col">
-              <div>
-                <div className="sub-label" style={{ marginTop: 0 }}>
-                  Matriz de confusão (conjunto de teste)
-                </div>
-                <div className="matrix">
-                  <div />
-                  <div className="h">previsto: spam</div>
-                  <div className="h">previsto: ham</div>
-                  <div className="h">real: spam</div>
-                  <div className="cell good">
-                    {info.evaluation.confusion.tp}
-                    <small>verdadeiro positivo</small>
-                  </div>
-                  <div className="cell bad">
-                    {info.evaluation.confusion.fn}
-                    <small>falso negativo</small>
-                  </div>
-                  <div className="h">real: ham</div>
-                  <div className="cell bad">
-                    {info.evaluation.confusion.fp}
-                    <small>falso positivo</small>
-                  </div>
-                  <div className="cell good">
-                    {info.evaluation.confusion.tn}
-                    <small>verdadeiro negativo</small>
-                  </div>
-                </div>
+          <div className="sub-label">
+            Validação cruzada (5-fold, {crossValidation.total} mensagens): com só {info.testDocuments} mensagens de
+            teste, um split único engana; aqui cada mensagem é testada uma vez por um modelo que não a viu.
+          </div>
+          <div className="stats">
+            <div className="stat">
+              <b>{pct(crossValidation.accuracy)}</b>
+              <span>Acurácia (CV)</span>
+            </div>
+            <div className="stat">
+              <b>{pct(crossValidation.precision)}</b>
+              <span>Precisão (CV)</span>
+            </div>
+            <div className="stat">
+              <b>{pct(crossValidation.recall)}</b>
+              <span>Recall (CV)</span>
+            </div>
+            <div className="stat">
+              <b>{pct(crossValidation.f1)}</b>
+              <span>F1-score (CV)</span>
+            </div>
+          </div>
+
+          <div className="two-col">
+            <div>
+              <div className="sub-label" style={{ marginTop: 0 }}>
+                Matriz de confusão (conjunto de teste)
               </div>
-              <div>
-                <div className="sub-label" style={{ marginTop: 0 }}>
-                  Tokens mais associados a spam
+              <div className="matrix">
+                <div />
+                <div className="h">previsto: spam</div>
+                <div className="h">previsto: ham</div>
+                <div className="h">real: spam</div>
+                <div className="cell good">
+                  {evaluation.confusion.tp}
+                  <small>verdadeiro positivo</small>
                 </div>
-                <div className="pills">
-                  {info.topSpamWords.map((w) => (
-                    <span className="pill spam" key={w.token}>
-                      {prettyToken(w.token)}
-                    </span>
-                  ))}
+                <div className="cell bad">
+                  {evaluation.confusion.fn}
+                  <small>falso negativo</small>
                 </div>
-                <div className="sub-label">Tokens mais associados a ham</div>
-                <div className="pills">
-                  {info.topHamWords.map((w) => (
-                    <span className="pill ham" key={w.token}>
-                      {prettyToken(w.token)}
-                    </span>
-                  ))}
+                <div className="h">real: ham</div>
+                <div className="cell bad">
+                  {evaluation.confusion.fp}
+                  <small>falso positivo</small>
+                </div>
+                <div className="cell good">
+                  {evaluation.confusion.tn}
+                  <small>verdadeiro negativo</small>
                 </div>
               </div>
             </div>
-          </section>
-        )}
+            <div>
+              <div className="sub-label" style={{ marginTop: 0 }}>
+                Tokens mais associados a spam
+              </div>
+              <div className="pills">
+                {info.topSpamWords.map((w) => (
+                  <span className="pill spam" key={w.token}>
+                    {prettyToken(w.token)}
+                  </span>
+                ))}
+              </div>
+              <div className="sub-label">Tokens mais associados a ham</div>
+              <div className="pills">
+                {info.topHamWords.map((w) => (
+                  <span className="pill ham" key={w.token}>
+                    {prettyToken(w.token)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="card">
           <h2>Use como API</h2>
           <p className="hint" style={{ marginTop: 0 }}>
-            O mesmo classificador responde em <code>POST /api/classify</code> com <code>{`{ "text": "..." }`}</code>.
+            O mesmo classificador responde em <code>POST /api/classify</code> com <code>{`{ "text": "..." }`}</code>{" "}
+            (CORS aberto). <code>GET /api/classify</code> devolve as métricas do modelo.
           </p>
         </section>
       </main>
 
       <footer>
-        Demonstração didática — corpus pequeno, não substitui um filtro de produção. · Vitor Hugo Rodrigues dos
-        Santos · Ciência de Dados · FATEC Cotia
+        Demonstração didática — corpus pequeno, não substitui um filtro de produção. · Vitor Hugo Rodrigues dos Santos
+        · Ciência de Dados · FATEC Cotia ·{" "}
+        <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+          código no GitHub
+        </a>
       </footer>
     </>
   );

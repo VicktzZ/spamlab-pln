@@ -112,3 +112,5 @@ const hamSplit = split(ALL_HAM);
 
 export const TRAIN_SET: Sample[] = [...spamSplit.train, ...hamSplit.train];
 export const TEST_SET: Sample[] = [...spamSplit.test, ...hamSplit.test];
+
+export const ALL_SAMPLES: Sample[] = [...ALL_SPAM, ...ALL_HAM];

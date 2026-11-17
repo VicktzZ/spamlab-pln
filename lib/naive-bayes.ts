@@ -47,10 +47,10 @@ const STOPWORDS = new Set(
 export function tokenize(text: string): string[] {
   const tokens: string[] = [];
 
-  if (/https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|biz|xyz|top|link|click|info)\b/i.test(text)) {
+  if (/https?:\/\/|www\.|\b(?:bit\.ly|tinyurl\.com|t\.co)\b|\b[a-z0-9-]+\.(?:com|net|biz|xyz|top|link|click|info)\b/i.test(text)) {
     tokens.push("__link__");
   }
-  if (/r\$|\$|usd|€|\breais\b/i.test(text)) tokens.push("__dinheiro__");
+  if (/r\$|\$|€|\b(?:usd|reais)\b/i.test(text)) tokens.push("__dinheiro__");
 
   const letters = text.replace(/[^A-Za-zÀ-ÿ]/g, "");
   const upper = letters.replace(/[^A-ZÀ-Ý]/g, "");
@@ -81,7 +81,11 @@ export class NaiveBayes {
   private docs: Record<Label, number> = { spam: 0, ham: 0 };
   private totalTokens: Record<Label, number> = { spam: 0, ham: 0 };
 
-  constructor(private alpha = 1) {}
+  private alpha: number;
+
+  constructor(alpha = 1) {
+    this.alpha = alpha;
+  }
 
   get vocabularySize(): number {
     return this.vocab.size;
@@ -158,6 +162,17 @@ export class NaiveBayes {
     };
   }
 
+  /** Texto original em segmentos; palavras conhecidas trazem o peso log P(w|spam) - log P(w|ham). */
+  highlight(text: string): { text: string; weight?: number }[] {
+    return text
+      .split(/([A-Za-zÀ-ÿ]+)/)
+      .filter((part) => part !== "")
+      .map((part) => {
+        const word = part.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (!/^[a-z]{2,}$/.test(word) || STOPWORDS.has(word) || !this.vocab.has(word)) return { text: part };
+        return { text: part, weight: Math.log(this.wordProb(word, "spam") / this.wordProb(word, "ham")) };
+      });
+  }
   /** Palavras mais associadas a cada classe (razão de verossimilhança, com frequência mínima). */
   topWords(label: Label, n = 10, minCount = 3): { token: string; weight: number }[] {
     const rows: { token: string; weight: number }[] = [];
@@ -182,17 +197,38 @@ export class NaiveBayes {
       else if (label === "ham" && predicted === "ham") tn++;
       else fn++;
     }
-    const total = tp + fp + tn + fn;
-    const precision = tp + fp === 0 ? 0 : tp / (tp + fp);
-    const recall = tp + fn === 0 ? 0 : tp / (tp + fn);
-    const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
-    return {
-      accuracy: total === 0 ? 0 : (tp + tn) / total,
-      precision,
-      recall,
-      f1,
-      confusion: { tp, fp, tn, fn },
-      total,
-    };
+    return metrics(tp, fp, tn, fn);
   }
+}
+
+export function metrics(tp: number, fp: number, tn: number, fn: number): Evaluation {
+  const total = tp + fp + tn + fn;
+  const precision = tp + fp === 0 ? 0 : tp / (tp + fp);
+  const recall = tp + fn === 0 ? 0 : tp / (tp + fn);
+  return {
+    accuracy: total === 0 ? 0 : (tp + tn) / total,
+    precision,
+    recall,
+    f1: precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall),
+    confusion: { tp, fp, tn, fn },
+    total,
+  };
+}
+
+/** Validação cruzada k-fold determinística (amostra i vai para o fold i % k): mais confiável que um split pequeno. */
+export function crossValidate(samples: Sample[], folds = 5, alpha = 1): Evaluation {
+  let tp = 0;
+  let fp = 0;
+  let tn = 0;
+  let fn = 0;
+  for (let f = 0; f < folds; f++) {
+    const model = new NaiveBayes(alpha);
+    model.train(samples.filter((_, i) => i % folds !== f));
+    const { confusion } = model.evaluate(samples.filter((_, i) => i % folds === f));
+    tp += confusion.tp;
+    fp += confusion.fp;
+    tn += confusion.tn;
+    fn += confusion.fn;
+  }
+  return metrics(tp, fp, tn, fn);
 }
