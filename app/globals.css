@@ -455,6 +455,76 @@ code {
   font-size: 0.85em;
 }
 
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  white-space: nowrap;
+}
+
+.gh-link:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.gh-link svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.highlighted {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.8;
+  background: #fbfdfe;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+}
+
+.hl {
+  color: inherit;
+  border-radius: 4px;
+  padding: 0 0.12em;
+}
+
+.hl.spam {
+  background: color-mix(in srgb, var(--spam) calc(var(--a) * 55%), transparent);
+}
+
+.hl.ham {
+  background: color-mix(in srgb, var(--ham) calc(var(--a) * 55%), transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+footer a {
+  color: var(--teal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill {
+    transition: none;
+  }
+}
 @media (max-width: 720px) {
   .two-col {
     grid-template-columns: 1fr;
